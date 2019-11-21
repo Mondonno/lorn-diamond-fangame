@@ -58,11 +58,74 @@ function drawTopBottomWalls() {
     ctx.fillRect(0, WALL_BOTTOM, WIDTH, HEIGHT);    
 }
 
+function updatePlayer(room, elapsed, total, eventQueue) {
+    let unhandledEventQueue = [];
+    console.log(eventQueue);
+    for (let i = 0; i < eventQueue.length; i++) {
+        switch (eventQueue[i]) {
+            case "right": 
+                room.playerState = "right";
+                room.playerAnimationUpdate = 0;
+            break;
+            case "idle_right": 
+                room.playerState = "idle_right";
+                room.playerAnimationUpdate = 0;
+            break;
+            case "left": 
+                room.playerState = "left";
+                room.playerAnimationUpdate = 0;
+            break;
+            case "idle_left": 
+                room.playerState = "idle_left";
+                room.playerAnimationUpdate = 0;
+            break;
+            default:
+                unhandledEventQueue.push(event);
+        }
+    }
+
+    if (total > room.playerAnimationUpdate) {
+        room.playerAnimationUpdate = total + RESOURCES.PLAYER.frameRate;
+        room.playerAnimation = (room.playerAnimation + 1) % RESOURCES.PLAYER[room.playerState].length;
+    }
+
+    switch (room.playerState){
+        case "idle_right": 
+            ctx.drawImage(RESOURCES.PLAYER.idle_right[room.playerAnimation], room.playerX, room.playerY);
+        break;
+        case "idle_left": 
+            ctx.drawImage(RESOURCES.PLAYER.idle_left[room.playerAnimation], room.playerX, room.playerY);
+        break;
+        case "right": 
+            room.playerX += 0.9 * elapsed;
+            ctx.drawImage(RESOURCES.PLAYER.right[room.playerAnimation], room.playerX, room.playerY);
+        break;
+        case "left": 
+            room.playerX -= 0.9 * elapsed;
+            ctx.drawImage(RESOURCES.PLAYER.left[room.playerAnimation], room.playerX, room.playerY);
+        break;
+    }
+
+    if (!room.goingBack && room.playerX < -250) {
+        room.playerX = WALL_RIGHT;
+    }
+    else if (room.goingAhead && room.playerX < -250) {
+        unhandledEventQueue.push({ type: "previousRoom" });
+    }
+    else if (!room.goingAhead && room.playerX > WIDTH + 180) {
+        room.playerX = WALL_LEFT - 70;
+    }
+    else if (room.goingAhead && room.playerX > WIDTH + 180) {
+        unhandledEventQueue.push({ type: "nextRoom" });
+    }
+
+    return unhandledEventQueue;
+}
 
 class Room {
     constructor() {
         this.goingBack = false;
-        this.goingAhead = false;
+        this.goingAhead = true;
         this.playerX = WALL_LEFT;
         this.playerY = WALL_BOTTOM - 100;
         
@@ -72,61 +135,15 @@ class Room {
     }
 
     update(elapsed, total, eventQueue) {
-        while (eventQueue.length > 0) {
-            switch (eventQueue.shift()) {
-                case "right": 
-                    this.playerState = "right";
-                    this.playerAnimationUpdate = 0;
-                break;
-                case "idle_right": 
-                    this.playerState = "idle_right";
-                    this.playerAnimationUpdate = 0;
-                break;
-                case "left": 
-                    this.playerState = "left";
-                    this.playerAnimationUpdate = 0;
-                break;
-                case "idle_left": 
-                    this.playerState = "idle_left";
-                    this.playerAnimationUpdate = 0;
-                break;
-            }
-        }
         
-        if (total > this.playerAnimationUpdate) {
-            this.playerAnimationUpdate = total + RESOURCES.PLAYER.frameRate;
-            this.playerAnimation = (this.playerAnimation + 1) % RESOURCES.PLAYER[this.playerState].length;
-        }
-
         drawForeground()
         drawTopBottomWalls();
 
-        switch (this.playerState){
-            case "idle_right": 
-                ctx.drawImage(RESOURCES.PLAYER.idle_right[this.playerAnimation], this.playerX, this.playerY);
-            break;
-            case "idle_left": 
-                ctx.drawImage(RESOURCES.PLAYER.idle_left[this.playerAnimation], this.playerX, this.playerY);
-            break;
-            case "right": 
-                this.playerX += 0.8 * elapsed;
-                ctx.drawImage(RESOURCES.PLAYER.right[this.playerAnimation], this.playerX, this.playerY);
-            break;
-            case "left": 
-                this.playerX -= 0.8 * elapsed;
-                ctx.drawImage(RESOURCES.PLAYER.left[this.playerAnimation], this.playerX, this.playerY);
-            break;
-        }
-
-        if (!this.goingBack && this.playerX < 0) {
-            this.playerX = WALL_RIGHT;
-        }
-        else if (!this.goingAhead && this.playerX > WIDTH) {
-            this.playerX = WALL_LEFT - 70;
-        }
+        eventQueue = updatePlayer(this, elapsed, total, eventQueue);
 
         drawLeftRightWalls();
 
+        return eventQueue;
     }
 
 }
@@ -137,8 +154,8 @@ class Game {
     constructor() {
         this.refreshRate = 1000 / 10;
         this.lastUpdate = 0;
-        this.inputQueue = [];
-        this.rooms = [ new Room() ];
+        this.eventQueue = [];
+        this.rooms = [ new Room(), new Room() ];
         this.currentRoom = 0;
         this.moveStart = 0;
 
@@ -148,25 +165,23 @@ class Game {
     }
 
     pushEvent(event) {
-        this.inputQueue.push(event);
+        this.eventQueue.push(event);
     }
 
     update(tm, t) {
-        let eventQueue = []
-
-        while (this.inputQueue.length > 0) {
-            let input = this.inputQueue.shift()
+        while (this.eventQueue.length > 0) {
+            let input = this.eventQueue.shift()
 
             if (input.type == 'keyup') {
                 switch (input.code) {
                     case "KeyD":
                     case "ArrowRight":
-                        eventQueue.push("idle_right");
+                        this.eventQueue.push("idle_right");
                         this.moveStart = t;
                     break;
                     case "KeyA":
                     case "ArrowLeft":
-                        eventQueue.push("idle_left");
+                        this.eventQueue.push("idle_left");
                         this.moveStart = t;
                     break;
                 }
@@ -176,11 +191,11 @@ class Game {
                 switch (input.code) {
                     case "KeyD":
                     case "ArrowRight":
-                        eventQueue.push("right");
+                            this.eventQueue.push("right");
                     break;
                     case "KeyA":
                     case "ArrowLeft":
-                        eventQueue.push("left");
+                            this.eventQueue.push("left");
                     break;
                 }
                 
@@ -188,9 +203,15 @@ class Game {
             else if (input.type == 'click') {
                 console.log(input.offsetX, input.offsetY);
             }
+            else if (input.type == 'nextRoom') {
+                console.log("NEXT");
+            }
+            else if (input.type == 'previousRoom') {
+                console.log("PREV");
+            }
         }
 
-        this.rooms[this.currentRoom].update(tm, t, eventQueue);
+        this.eventQueue = this.rooms[this.currentRoom].update(tm, t, this.eventQueue); // ---------------
     }
 
     loop(t) {
