@@ -14,12 +14,18 @@ const WALL_BOTTOM = HEIGHT - 100;
 
 const SPRITE_SQUARE = 10;
 
-const RESOURCES = {
+const Resources = {
     PLAYER : {
-        left: loadImageGroup("char/left/", 9, "png"),
-        right: loadImageGroup("char/right/", 9, "png"),
-        idle_left: loadImageGroup("char/idle_left/", 1, "png"),
-        idle_right: loadImageGroup("char/idle_right/", 1, "png"),
+        "1" : {
+            walk: loadImageGroup("char/right/", 9, "png"),
+            idle: loadImageGroup("char/idle_right/", 1, "png"),
+            jump: loadImageGroup("char/jump_right/", 1, "png"),
+        },
+        "-1" : {
+            walk: loadImageGroup("char/left/", 9, "png"),
+            idle: loadImageGroup("char/idle_left/", 1, "png"),
+            jump: loadImageGroup("char/jump_left/", 1, "png"),
+        },
         frameRate: 60,
     }
 }
@@ -58,88 +64,67 @@ function drawTopBottomWalls() {
     ctx.fillRect(0, WALL_BOTTOM, WIDTH, HEIGHT);    
 }
 
-function updatePlayer(room, elapsed, total, eventQueue) {
-    let unhandledEventQueue = [];
-    console.log(eventQueue);
-    for (let i = 0; i < eventQueue.length; i++) {
-        switch (eventQueue[i]) {
-            case "right": 
-                room.playerState = "right";
-                room.playerAnimationUpdate = 0;
-            break;
-            case "idle_right": 
-                room.playerState = "idle_right";
-                room.playerAnimationUpdate = 0;
-            break;
-            case "left": 
-                room.playerState = "left";
-                room.playerAnimationUpdate = 0;
-            break;
-            case "idle_left": 
-                room.playerState = "idle_left";
-                room.playerAnimationUpdate = 0;
-            break;
-            default:
-                unhandledEventQueue.push(event);
+function newPlayer(x = 0, y = 0) {
+    return {
+        x: x,
+        y: y,
+        turn: 1, // right | left
+        state: "idle", // idle | walk | jump
+        animationUpdate: 0,
+        animation: 0,
+        speed: 0.9,
+    }
+}
+
+function updatePlayer(player, elapsed, total, eventQueue) {
+    // Handling events
+    while (eventQueue.length > 0) {
+        let event = eventQueue.shift();
+
+        if (event.type == "right" && !(player.turn == 1 && player.state == "walk")) {
+            player.state = "walk";
+            player.turn = 1;
+            player.animationUpdate = 0; 
+        }
+        else if (event.type == "left" && !(player.turn == -1 && player.state == "walk")) {
+            player.state = "walk";
+            player.turn = -1;
+            player.animationUpdate = 0;       
+        }
+        else if (event.type == "idle" && player.state != "idle") {
+            player.state = "idle";
+            player.animationUpdate = 0;
         }
     }
 
-    if (total > room.playerAnimationUpdate) {
-        room.playerAnimationUpdate = total + RESOURCES.PLAYER.frameRate;
-        room.playerAnimation = (room.playerAnimation + 1) % RESOURCES.PLAYER[room.playerState].length;
+    // Logic
+    if (player.state == "walk") {
+        player.x += player.speed * player.turn * elapsed;
     }
 
-    switch (room.playerState){
-        case "idle_right": 
-            ctx.drawImage(RESOURCES.PLAYER.idle_right[room.playerAnimation], room.playerX, room.playerY);
-        break;
-        case "idle_left": 
-            ctx.drawImage(RESOURCES.PLAYER.idle_left[room.playerAnimation], room.playerX, room.playerY);
-        break;
-        case "right": 
-            room.playerX += 0.9 * elapsed;
-            ctx.drawImage(RESOURCES.PLAYER.right[room.playerAnimation], room.playerX, room.playerY);
-        break;
-        case "left": 
-            room.playerX -= 0.9 * elapsed;
-            ctx.drawImage(RESOURCES.PLAYER.left[room.playerAnimation], room.playerX, room.playerY);
-        break;
+    // Animation
+    if (total > player.animationUpdate) {
+        player.animationUpdate = total + Resources.PLAYER.frameRate;
+        player.animation = (player.animation + 1) % Resources.PLAYER[player.turn][player.state].length;
     }
 
-    if (!room.goingBack && room.playerX < -250) {
-        room.playerX = WALL_RIGHT;
-    }
-    else if (room.goingAhead && room.playerX < -250) {
-        unhandledEventQueue.push({ type: "previousRoom" });
-    }
-    else if (!room.goingAhead && room.playerX > WIDTH + 180) {
-        room.playerX = WALL_LEFT - 70;
-    }
-    else if (room.goingAhead && room.playerX > WIDTH + 180) {
-        unhandledEventQueue.push({ type: "nextRoom" });
-    }
-
-    return unhandledEventQueue;
+    // Redraw
+    ctx.drawImage(Resources.PLAYER[player.turn][player.state][player.animation], player.x, player.y);
 }
 
 class Room {
     constructor() {
+        this.player = newPlayer(WALL_LEFT + 20, WALL_BOTTOM - 100);
+
         this.goingBack = false;
         this.goingAhead = true;
-        this.playerX = WALL_LEFT;
-        this.playerY = WALL_BOTTOM - 100;
-        
-        this.playerState = "idle_right";
-        this.playerAnimationUpdate = 0;
-        this.playerAnimation = 0;
     }
 
     update(elapsed, total, eventQueue) {
-        
         drawForeground()
         drawTopBottomWalls();
 
-        eventQueue = updatePlayer(this, elapsed, total, eventQueue);
+        updatePlayer(this.player, elapsed, total, eventQueue);
 
         drawLeftRightWalls();
 
@@ -154,64 +139,48 @@ class Game {
     constructor() {
         this.refreshRate = 1000 / 10;
         this.lastUpdate = 0;
-        this.eventQueue = [];
+        this.inputQueue = [];
         this.rooms = [ new Room(), new Room() ];
         this.currentRoom = 0;
-        this.moveStart = 0;
+        this.keyboard = {};
 
-        canvas.addEventListener('keyup', this.pushEvent.bind(this));
-        canvas.addEventListener('keydown', this.pushEvent.bind(this));
-        canvas.addEventListener('click', this.pushEvent.bind(this));
+        canvas.addEventListener('keyup', this.pushInput.bind(this));
+        canvas.addEventListener('keydown', this.pushInput.bind(this));
+        canvas.addEventListener('click', this.pushInput.bind(this));
     }
 
-    pushEvent(event) {
-        this.eventQueue.push(event);
+    pushInput(event) {
+        this.inputQueue.push(event);
     }
 
     update(tm, t) {
-        while (this.eventQueue.length > 0) {
-            let input = this.eventQueue.shift()
+        let eventQueue = [];
 
-            if (input.type == 'keyup') {
-                switch (input.code) {
-                    case "KeyD":
-                    case "ArrowRight":
-                        this.eventQueue.push("idle_right");
-                        this.moveStart = t;
-                    break;
-                    case "KeyA":
-                    case "ArrowLeft":
-                        this.eventQueue.push("idle_left");
-                        this.moveStart = t;
-                    break;
-                }
-            }
-            else if (input.type == 'keydown' && !input.repeat) {
-                console.log(input);
-                switch (input.code) {
-                    case "KeyD":
-                    case "ArrowRight":
-                            this.eventQueue.push("right");
-                    break;
-                    case "KeyA":
-                    case "ArrowLeft":
-                            this.eventQueue.push("left");
-                    break;
-                }
-                
-            }
+        // Collecting user input
+        while (this.inputQueue.length > 0) {
+            let input = this.inputQueue.shift()
+            if (input.type == 'keyup') 
+                this.keyboard[input.code] = false;
+            else if (input.type == 'keydown' && !input.repeat) 
+                this.keyboard[input.code] = true;
             else if (input.type == 'click') {
                 console.log(input.offsetX, input.offsetY);
             }
-            else if (input.type == 'nextRoom') {
-                console.log("NEXT");
-            }
-            else if (input.type == 'previousRoom') {
-                console.log("PREV");
-            }
         }
 
-        this.eventQueue = this.rooms[this.currentRoom].update(tm, t, this.eventQueue); // ---------------
+        // Bind input to game events
+        if (this.keyboard["KeyD"] && (!this.keyboard["KeyA"])) {
+            eventQueue.push({ type: "right" });
+        } 
+        else if (this.keyboard["KeyA"] && (!this.keyboard["KeyD"])) {
+            eventQueue.push({ type: "left" });
+        } 
+        else {
+            eventQueue.push({ type: "idle" });
+        }
+
+        // Update current room
+        this.rooms[this.currentRoom].update(tm, t, eventQueue);
     }
 
     loop(t) {
