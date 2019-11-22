@@ -68,8 +68,11 @@ function newPlayer(x = 0, y = 0) {
     return {
         x: x,
         y: y,
+        floor: y,
+        yForce: 0.4,
         turn: 1, // right | left
-        state: "idle", // idle | walk | jump
+        state: "idle", // idle | walk
+        jump: 0,
         animationUpdate: 0,
         animation: 0,
         speed: 0.9,
@@ -95,10 +98,30 @@ function updatePlayer(player, elapsed, total, eventQueue) {
             player.state = "idle";
             player.animationUpdate = 0;
         }
+        else if (event.type == "jump" && player.jump == 0) {
+            player.jump = 1;
+            player.yForce = -10;
+        }
     }
 
-    // Logic
-    if (player.state == "walk") {
+    // Y Movement
+    if (player.y >= player.floor) {
+        player.yForce = 0;
+        player.y = player.floor;    
+    }
+    else if (player.y < player.floor) {
+       player.yForce += 0.05;    
+    }
+
+    if (player.y + player.yForce * elapsed >= player.floor) {
+        player.y = player.floor;
+    }
+    else {
+        player.y += player.yForce * elapsed;
+    }
+
+    // X Movement
+    if (player.state == "walk")  {
         player.x += player.speed * player.turn * elapsed;
     }
 
@@ -112,35 +135,68 @@ function updatePlayer(player, elapsed, total, eventQueue) {
     ctx.drawImage(Resources.PLAYER[player.turn][player.state][player.animation], player.x, player.y);
 }
 
-class Room {
-    constructor() {
-        this.player = newPlayer(WALL_LEFT + 20, WALL_BOTTOM - 100);
+function checkPlayerExit(player, goingLeft, goingRight) {
+    console.log(player.x);
+    if (player.x < WALL_LEFT - 120) {
+        if (!goingLeft) {
+            player.x = WALL_RIGHT + 50;
+            return "loop_left";
+        }
+        else {
+            player.x += 130;
+            return "go_left";
+        }
+    }
 
-        this.goingBack = false;
-        this.goingAhead = true;
+    if (player.x > WALL_RIGHT + 50) {
+        if (!goingRight) {
+            player.x = WALL_LEFT - 120;
+            return "loop_right";
+        }
+        else {
+            player.x -= 130;
+            return "go_right";
+        }
+    }
+}
+
+class Room {
+    constructor(goingLeft, goingRight, drawWalls = true) {
+        this.goingLeft = goingLeft;
+        this.goingRight = goingRight;
+        this.drawWalls = true;
+        this.player = newPlayer(WALL_LEFT + 10, WALL_BOTTOM - 100);
     }
 
     update(elapsed, total, eventQueue) {
         drawForeground()
-        drawTopBottomWalls();
+        if (this.drawWalls) drawTopBottomWalls();
 
         updatePlayer(this.player, elapsed, total, eventQueue);
 
-        drawLeftRightWalls();
+        if (this.drawWalls) drawLeftRightWalls();
 
-        return eventQueue;
+        return checkPlayerExit(this.player, this.goingLeft, this.goingRight);
     }
-
 }
 
 
+const ROOMS = [
+    Object.assign(new Room(false, true), {
+        drawWalls: true,
+    }),
+    Object.assign(new Room(true, false), {
+        drawWalls: false,
+    }),
+];
+console.log(ROOMS)
 
 class Game {
     constructor() {
         this.refreshRate = 1000 / 10;
         this.lastUpdate = 0;
         this.inputQueue = [];
-        this.rooms = [ new Room(), new Room() ];
+        this.rooms = ROOMS;
         this.currentRoom = 0;
         this.keyboard = {};
 
@@ -169,10 +225,14 @@ class Game {
         }
 
         // Bind input to game events
-        if (this.keyboard["KeyD"] && (!this.keyboard["KeyA"])) {
+        if (this.keyboard["KeyZ"]) {
+            eventQueue.push({ type: "jump" });
+        }
+
+        if (this.keyboard["ArrowRight"] && (!this.keyboard["ArrowLeft"])) {
             eventQueue.push({ type: "right" });
         } 
-        else if (this.keyboard["KeyA"] && (!this.keyboard["KeyD"])) {
+        else if (this.keyboard["ArrowLeft"] && (!this.keyboard["ArrowRight"])) {
             eventQueue.push({ type: "left" });
         } 
         else {
@@ -180,7 +240,10 @@ class Game {
         }
 
         // Update current room
-        this.rooms[this.currentRoom].update(tm, t, eventQueue);
+        let playerExit = this.rooms[this.currentRoom].update(tm, t, eventQueue);
+        if (playerExit == "go_left") this.currentRoom--;
+        else if (playerExit == "go_right") this.currentRoom++;
+
     }
 
     loop(t) {
@@ -194,3 +257,4 @@ class Game {
 
 let game = new Game();
 game.loop(1);
+
