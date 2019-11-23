@@ -32,17 +32,17 @@ const Resources = {
     Cat: {
         "1": {
             idle: loadImageGroup("cat/idle_right/", 1, "png"),
-            look: loadImageGroup("cat/look_right/", 5, "png"),
+            look: loadImageGroup("cat/look_right/", 4, "png"),
             wake: loadImageGroup("cat/wake_right/", 3, "png"),
             walk: loadImageGroup("cat/walk_right/", 7, "png"),
         },
         "-1": {
             idle: loadImageGroup("cat/idle_left/", 1, "png"),
-            look: loadImageGroup("cat/look_left/", 3, "png"),
+            look: loadImageGroup("cat/look_left/", 4, "png"),
             wake: loadImageGroup("cat/wake_left/", 3, "png"),
             walk: loadImageGroup("cat/walk_left/", 7, "png"),
         },
-        frameRate: 120,
+        frameRate: 80,
     }
 }
 
@@ -90,25 +90,42 @@ class GameObject {
         this.animationUpdate = 0;
         this.animation = 0;
     }
+
+    getRoundX() {
+        if (this.x % 10 < 5) 
+            return this.x - this.x % 10;
+        else 
+            return this.x + 10 - this.x % 10;
+    }
+
+    getRoundY() {
+        if (this.y % 10 < 5) 
+            return this.y - this.y % 10;
+        else 
+            return this.y + 10 - this.y % 10;
+    }
 }
 
 class Cat extends GameObject {
     constructor(x, y){
         super(x, y);
         this.resource = "Cat";
-        this.woken = false;
+        this.animationLoop = false;
     }
 
     update(elapsed, total, eventQueue) {
         // Animation
-        if (!this.woken && this.animation == 4 && this.turn == 1) {
-            this.woken = true;
+        if (total > this.animationUpdate && this.state == "look" && this.animationLoop) {
             this.state = "idle";
             this.animation = 0;
+            this.animationLoop = false;
         }
 
+        // Animation
         if (total > this.animationUpdate) {
             this.animationUpdate = total + Resources[this.resource].frameRate;
+            if (this.animation + 2 == Resources[this.resource][this.turn][this.state].length)
+                this.animationLoop = true;
             this.animation = (this.animation + 1) % Resources[this.resource][this.turn][this.state].length;
         }
 
@@ -147,8 +164,7 @@ class Player extends GameObject {
                 this.animationUpdate = 0;       
             }
             else if (event.type == "idle" && this.state != "idle") {
-                if (this.x % 10 < 5) this.x -= this.x % 10;
-                else this.x += 10 - this.x % 10;
+                this.x = this.getRoundX();
                 this.state = "idle";
                 this.animationUpdate = 0;
             }
@@ -245,7 +261,12 @@ class RoomCat extends Room {
     }
 
     update(elapsed, total, eventQueue) {
-        return super.update(elapsed, total, eventQueue);
+        let ret =  super.update(elapsed, total, eventQueue);
+
+        console.log(this.player.x, this.env[0].x);
+        if (this.player.getRoundX() == this.env[0].x) this.env[0].state = "look";
+
+        return ret;
     }
 }
 
@@ -262,7 +283,7 @@ class RoomCat1 extends Room {
 
 
 const ROOMS = [
-    new Room(false, true), // Empty room
+    //new Room(false, true), // Empty room
     new RoomCat(true, true), // A cat appears...
     new RoomCat1(true, false), // ...and it's running behind player
     // a cat is still running, a strange mirror is here, death is coming
