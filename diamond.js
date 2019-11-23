@@ -15,18 +15,34 @@ const WALL_BOTTOM = HEIGHT - 100;
 const SPRITE_SQUARE = 10;
 
 const Resources = {
-    PLAYER : {
-        "1" : {
+    PLAYER: {
+        "1": {
             walk: loadImageGroup("char/right/", 9, "png"),
             idle: loadImageGroup("char/idle_right/", 1, "png"),
             jump: loadImageGroup("char/jump_right/", 1, "png"),
         },
-        "-1" : {
+        "-1": {
             walk: loadImageGroup("char/left/", 9, "png"),
             idle: loadImageGroup("char/idle_left/", 1, "png"),
             jump: loadImageGroup("char/jump_left/", 1, "png"),
         },
         frameRate: 60,
+    },
+
+    Cat: {
+        "1": {
+            idle: loadImageGroup("cat/idle_right/", 1, "png"),
+            look: loadImageGroup("cat/look_right/", 3, "png"),
+            wake: loadImageGroup("cat/wake_right/", 3, "png"),
+            walk: loadImageGroup("cat/walk_right/", 7, "png"),
+        },
+        "-1": {
+            idle: loadImageGroup("cat/idle_left/", 1, "png"),
+            look: loadImageGroup("cat/look_left/", 3, "png"),
+            wake: loadImageGroup("cat/wake_left/", 3, "png"),
+            walk: loadImageGroup("cat/walk_left/", 7, "png"),
+        },
+        frameRate: 80,
     }
 }
 
@@ -64,6 +80,28 @@ function drawTopBottomWalls() {
     ctx.fillRect(0, WALL_BOTTOM, WIDTH, HEIGHT);    
 }
 
+class Something {
+    constructor(x = WIDTH / 2, y = WALL_BOTTOM - 50) {
+        this.x = x;
+        this.y = y;
+        this.turn = 1;
+        this.state = "idle";
+        this.animation = 0;
+        this.animationUpdate = 0;
+        this.animation = 0;
+    }
+}
+
+class Cat extends Something {
+    constructor(x, y){
+        super(x, y);
+    }
+
+    update(elapsed, total, eventQueue) {
+        ctx.drawImage(Resources.Cat[this.turn][this.state][this.animation], this.x, this.y);
+    }
+}
+
 function newPlayer(x = 0, y = 0) {
     return {
         x: x,
@@ -95,6 +133,8 @@ function updatePlayer(player, elapsed, total, eventQueue) {
             player.animationUpdate = 0;       
         }
         else if (event.type == "idle" && player.state != "idle") {
+            if (player.x % 10 < 5) player.x -= player.x % 10;
+            else player.x += 10 - player.x % 10;
             player.state = "idle";
             player.animationUpdate = 0;
         }
@@ -166,11 +206,14 @@ class Room {
         this.goingRight = goingRight;
         this.drawWalls = true;
         this.player = newPlayer(WALL_LEFT + 10, WALL_BOTTOM - 100);
+        this.env = [];
     }
 
     update(elapsed, total, eventQueue) {
         drawForeground()
         if (this.drawWalls) drawTopBottomWalls();
+
+        for (let e of this.env) e.update(elapsed, total, eventQueue);
 
         updatePlayer(this.player, elapsed, total, eventQueue);
 
@@ -184,6 +227,7 @@ class Room {
 const ROOMS = [
     Object.assign(new Room(false, true), {
         drawWalls: true,
+        env: [new Cat(400, WALL_BOTTOM - 80)],
     }),
     Object.assign(new Room(true, false), {
         drawWalls: false,
