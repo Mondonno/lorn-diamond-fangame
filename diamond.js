@@ -32,7 +32,7 @@ const Resources = {
     Cat: {
         "1": {
             idle: loadImageGroup("cat/idle_right/", 1, "png"),
-            look: loadImageGroup("cat/look_right/", 3, "png"),
+            look: loadImageGroup("cat/look_right/", 5, "png"),
             wake: loadImageGroup("cat/wake_right/", 3, "png"),
             walk: loadImageGroup("cat/walk_right/", 7, "png"),
         },
@@ -42,7 +42,7 @@ const Resources = {
             wake: loadImageGroup("cat/wake_left/", 3, "png"),
             walk: loadImageGroup("cat/walk_left/", 7, "png"),
         },
-        frameRate: 80,
+        frameRate: 120,
     }
 }
 
@@ -80,7 +80,7 @@ function drawTopBottomWalls() {
     ctx.fillRect(0, WALL_BOTTOM, WIDTH, HEIGHT);    
 }
 
-class Something {
+class GameObject {
     constructor(x = WIDTH / 2, y = WALL_BOTTOM - 50) {
         this.x = x;
         this.y = y;
@@ -92,149 +92,194 @@ class Something {
     }
 }
 
-class Cat extends Something {
+class Cat extends GameObject {
     constructor(x, y){
         super(x, y);
+        this.resource = "Cat";
+        this.woken = false;
     }
 
     update(elapsed, total, eventQueue) {
-        ctx.drawImage(Resources.Cat[this.turn][this.state][this.animation], this.x, this.y);
+        // Animation
+        if (!this.woken && this.animation == 4 && this.turn == 1) {
+            this.woken = true;
+            this.state = "idle";
+            this.animation = 0;
+        }
+
+        if (total > this.animationUpdate) {
+            this.animationUpdate = total + Resources[this.resource].frameRate;
+            this.animation = (this.animation + 1) % Resources[this.resource][this.turn][this.state].length;
+        }
+
+        // Redrawing
+        ctx.drawImage(Resources[this.resource][this.turn][this.state][this.animation], this.x, this.y);
     }
 }
 
-function newPlayer(x = 0, y = 0) {
-    return {
-        x: x,
-        y: y,
-        floor: y,
-        yForce: 0.4,
-        turn: 1, // right | left
-        state: "idle", // idle | walk
-        jump: 0,
-        animationUpdate: 0,
-        animation: 0,
-        speed: 0.9,
-    }
-}
+class Player extends GameObject {
+    constructor(x, y){
+        super(x, y);
+        this.resource = "PLAYER";
+        this.floor = y;
+        this.yForce = 0.4;
+        this.turn = 1; // right | left
+        this.state = "idle"; // idle | walk
+        this.jump = 0;
+        this.animationUpdate = 0;
+        this.animation = 0;
+        this.speed = 0.9;
+    } 
 
-function updatePlayer(player, elapsed, total, eventQueue) {
-    // Handling events
-    while (eventQueue.length > 0) {
-        let event = eventQueue.shift();
-
-        if (event.type == "right" && !(player.turn == 1 && player.state == "walk")) {
-            player.state = "walk";
-            player.turn = 1;
-            player.animationUpdate = 0; 
+    update(elapsed, total, eventQueue) {
+        // Handling events
+        while (eventQueue.length > 0) {
+            let event = eventQueue.shift();
+    
+            if (event.type == "right" && !(this.turn == 1 && this.state == "walk")) {
+                this.state = "walk";
+                this.turn = 1;
+                this.animationUpdate = 0; 
+            }
+            else if (event.type == "left" && !(this.turn == -1 && this.state == "walk")) {
+                this.state = "walk";
+                this.turn = -1;
+                this.animationUpdate = 0;       
+            }
+            else if (event.type == "idle" && this.state != "idle") {
+                if (this.x % 10 < 5) this.x -= this.x % 10;
+                else this.x += 10 - this.x % 10;
+                this.state = "idle";
+                this.animationUpdate = 0;
+            }
+            else if (event.type == "jump" && this.jump == 0) {
+                this.jump = 1;
+                this.yForce = -10;
+            }
         }
-        else if (event.type == "left" && !(player.turn == -1 && player.state == "walk")) {
-            player.state = "walk";
-            player.turn = -1;
-            player.animationUpdate = 0;       
+    
+        // Y Movement
+        if (this.y >= this.floor) {
+            this.yForce = 0;
+            this.y = this.floor;    
         }
-        else if (event.type == "idle" && player.state != "idle") {
-            if (player.x % 10 < 5) player.x -= player.x % 10;
-            else player.x += 10 - player.x % 10;
-            player.state = "idle";
-            player.animationUpdate = 0;
+        else if (this.y < this.floor) {
+           this.yForce += 0.05;    
         }
-        else if (event.type == "jump" && player.jump == 0) {
-            player.jump = 1;
-            player.yForce = -10;
-        }
-    }
-
-    // Y Movement
-    if (player.y >= player.floor) {
-        player.yForce = 0;
-        player.y = player.floor;    
-    }
-    else if (player.y < player.floor) {
-       player.yForce += 0.05;    
-    }
-
-    if (player.y + player.yForce * elapsed >= player.floor) {
-        player.y = player.floor;
-    }
-    else {
-        player.y += player.yForce * elapsed;
-    }
-
-    // X Movement
-    if (player.state == "walk")  {
-        player.x += player.speed * player.turn * elapsed;
-    }
-
-    // Animation
-    if (total > player.animationUpdate) {
-        player.animationUpdate = total + Resources.PLAYER.frameRate;
-        player.animation = (player.animation + 1) % Resources.PLAYER[player.turn][player.state].length;
-    }
-
-    // Redraw
-    ctx.drawImage(Resources.PLAYER[player.turn][player.state][player.animation], player.x, player.y);
-}
-
-function checkPlayerExit(player, goingLeft, goingRight) {
-    console.log(player.x);
-    if (player.x < WALL_LEFT - 120) {
-        if (!goingLeft) {
-            player.x = WALL_RIGHT + 50;
-            return "loop_left";
+    
+        if (this.y + this.yForce * elapsed >= this.floor) {
+            this.y = this.floor;
         }
         else {
-            player.x += 130;
-            return "go_left";
+            this.y += this.yForce * elapsed;
         }
+    
+        // X Movement
+        if (this.state == "walk")  {
+            this.x += this.speed * this.turn * elapsed;
+        }
+    
+        // Animation
+        if (total > this.animationUpdate) {
+            this.animationUpdate = total + Resources[this.resource].frameRate;
+            this.animation = (this.animation + 1) % Resources[this.resource][this.turn][this.state].length;
+        }
+    
+        // Redraw
+        ctx.drawImage(Resources[this.resource][this.turn][this.state][this.animation], this.x, this.y);
     }
-
-    if (player.x > WALL_RIGHT + 50) {
-        if (!goingRight) {
-            player.x = WALL_LEFT - 120;
-            return "loop_right";
-        }
-        else {
-            player.x -= 130;
-            return "go_right";
-        }
-    }
+    
 }
+
 
 class Room {
     constructor(goingLeft, goingRight, drawWalls = true) {
         this.goingLeft = goingLeft;
         this.goingRight = goingRight;
         this.drawWalls = true;
-        this.player = newPlayer(WALL_LEFT + 10, WALL_BOTTOM - 100);
+        this.player = new Player(WALL_LEFT + 10, WALL_BOTTOM - 100);
         this.env = [];
     }
 
+    checkPlayerExit() {
+        if (this.player.x < WALL_LEFT - 120) {
+            if (!this.goingLeft) {
+                this.player.x = WALL_RIGHT + 50;
+                return "loop_left";
+            }
+            else {
+                this.player.x += 130;
+                return "go_left";
+            }
+        }
+    
+        if (this.player.x > WALL_RIGHT + 50) {
+            if (!this.goingRight) {
+                this.player.x = WALL_LEFT - 120;
+                return "loop_right";
+            }
+            else {
+                this.player.x -= 130;
+                return "go_right";
+            }
+        }
+    }
+
     update(elapsed, total, eventQueue) {
-        drawForeground()
         if (this.drawWalls) drawTopBottomWalls();
 
         for (let e of this.env) e.update(elapsed, total, eventQueue);
 
-        updatePlayer(this.player, elapsed, total, eventQueue);
+        this.player.update(elapsed, total, eventQueue);
 
         if (this.drawWalls) drawLeftRightWalls();
 
-        return checkPlayerExit(this.player, this.goingLeft, this.goingRight);
+        return this.checkPlayerExit();
+    }
+}
+
+class RoomCat extends Room {
+    constructor(goingLeft, goingRight) {
+        super(goingLeft, goingRight);
+        this.env.push(new Cat(300, WALL_BOTTOM - 80));
+    }
+
+    update(elapsed, total, eventQueue) {
+        return super.update(elapsed, total, eventQueue);
+    }
+}
+
+class RoomCat1 extends Room {
+    constructor(goingLeft, goingRight) {
+        super(goingLeft, goingRight);
+        this.env.push(new Cat(0, WALL_BOTTOM - 80));
+    }
+
+    update(elapsed, total, eventQueue) {
+        return super.update(elapsed, total, eventQueue);
     }
 }
 
 
 const ROOMS = [
-    Object.assign(new Room(false, true), {
-        drawWalls: true,
-        env: [new Cat(400, WALL_BOTTOM - 80)],
-    }),
-    Object.assign(new Room(true, false), {
-        drawWalls: false,
-    }),
-];
-console.log(ROOMS)
+    new Room(false, true), // Empty room
+    new RoomCat(true, true), // A cat appears...
+    new RoomCat1(true, false), // ...and it's running behind player
+    // a cat is still running, a strange mirror is here, death is coming
+    // a shadow of cat blinks once, death is coming
+    // death is coming
+    // a center wall appears
+    // a center wall is already here
+    // death is coming
+    // triple stairs
+    // stairs again
+    // plane
+    // factory of cats?
+    // a cat is running in front of player
 
+];
+
+// Main game class
 class Game {
     constructor() {
         this.refreshRate = 1000 / 10;
@@ -284,13 +329,14 @@ class Game {
         }
 
         // Update current room
+        drawForeground()
         let playerExit = this.rooms[this.currentRoom].update(tm, t, eventQueue);
         if (playerExit == "go_left") this.currentRoom--;
         else if (playerExit == "go_right") this.currentRoom++;
 
     }
 
-    loop(t) {
+    loop(t = 1) {
         this.update(this.refreshRate / (t - this.lastUpdate), t);
 
         this.lastUpdate = t;
@@ -300,5 +346,5 @@ class Game {
 };
 
 let game = new Game();
-game.loop(1);
+game.loop();
 
