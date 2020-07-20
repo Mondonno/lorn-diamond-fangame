@@ -5,11 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <link rel="stylesheet" type="text/css" href="diamond.css">
+    <!-- Adding JQuery Library -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
     <title>'Diamond'</title>
 </head>
 <body>
-    <iframe src="https://cdn.discordapp.com/attachments/688391374252670986/733997610024697876/1_diamond-music.mp3" allow="autoplay" style="display:none" id="AudioFrame">
-    </iframe> 
+    <!-- Fixing the music problem on the Chrome browser -->
+    <iframe src="music/1_diamond-music.mp3" allow="autoplay" id="audio" style="display: none"></iframe>
+    <audio autoplay loop  id="playAudio">
+        <source src="music/1_diamond-music.mp3">
+    </audio>
+
     <div class='content'>
     <i>Lorn 'Diamond'</i><br>
     <i><u>the game</u></i>

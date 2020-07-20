@@ -11,7 +11,7 @@ const WALL_LEFT = 100;
 const WALL_RIGHT = WIDTH - 100;
 const WALL_TOP = 100;
 const WALL_BOTTOM = HEIGHT - 100;
-
+let CAT_FOLLOWING = false;
 const SPRITE_SQUARE = 10;
 
 const Resources = {
@@ -261,10 +261,15 @@ class RoomCat extends Room {
     }
 
     update(elapsed, total, eventQueue) {
+        
         let ret =  super.update(elapsed, total, eventQueue);
 
         console.log(this.player.x, this.env[0].x);
-        if (this.player.getRoundX() == this.env[0].x) this.env[0].state = "look";
+        if (this.player.getRoundX() == this.env[0].x){ 
+            this.env[0].state = "look"
+            CAT_FOLLOWING = true
+            console.log("XXXXXXX2")
+    }
 
         return ret;
     }
@@ -277,6 +282,7 @@ class RoomCat1 extends Room {
     }
 
     update(elapsed, total, eventQueue) {
+        
         return super.update(elapsed, total, eventQueue);
     }
 }
