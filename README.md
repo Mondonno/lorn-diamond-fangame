@@ -14,3 +14,5 @@ Credits for the lorn diamond clip and:
 `->>` @Mondonno <br>
 `->>` @dsonyy
 
+### This code is not FINISHED!
+
